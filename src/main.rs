@@ -8,23 +8,18 @@ struct EventParam {
     key: String,
 }
 
-fn main() {
-    let server = HttpServer::new(move || {
-        App::new()
-            .route("/event", web::post().to(post_event))
-    });
-
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
     println!("Serving on http://0.0.0.0:8081 ...");
-    server
-        .bind("0.0.0.0:8081")
-        .expect("Error binding server to address")
-        .run().expect("error running server");
+    HttpServer::new(|| App::new().route("/event", web::post().to(post_event)))
+        .bind("0.0.0.0:8081")?
+        .run().await
 }
 
 fn post_event(event: web::Json<EventParam>) -> HttpResponse {
     use std::str::FromStr;
     
-    let device_path = "/dev/input/event2";
+    let device_path = "/dev/input/event3";
     let mut device = match Device::open(device_path) {
         Ok(v) => v,
         Err(e) =>  {
