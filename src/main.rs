@@ -3,6 +3,7 @@ use evdev::{Device, Key, InputEvent, EventType};
 use actix_web::{web, App, HttpResponse, HttpServer, HttpRequest};
 use serde::{Deserialize};
 use std::sync::Mutex;
+use std::env;
 
 #[derive(Deserialize)]
 struct EventParam {
@@ -14,7 +15,12 @@ async fn main() -> std::io::Result<()> {
     println!("Serving on http://0.0.0.0:8081 ...");
 
     HttpServer::new(move || {
-        let input_device_path = "/dev/input/event3";
+        let args: Vec<String> = env::args().skip(1).collect();
+        let input_device_path = match args.len() {
+            0 => "/dev/input/event3",
+            _ => &args[0]
+        };
+        
         let input_device = match Device::open(input_device_path) {
             Ok(v) => Mutex::new(v),
             Err(e) =>  {
