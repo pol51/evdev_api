@@ -1,7 +1,8 @@
 use text_colorizer::*;
 use evdev::{Device, Key, InputEvent, EventType};
-use actix_web::{web, App, HttpResponse, HttpServer};
+use actix_web::{web, App, HttpResponse, HttpServer, HttpRequest};
 use serde::{Deserialize};
+use std::sync::Mutex;
 
 #[derive(Deserialize)]
 struct EventParam {
@@ -11,24 +12,31 @@ struct EventParam {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     println!("Serving on http://0.0.0.0:8081 ...");
-    HttpServer::new(|| App::new().route("/event", web::post().to(post_event)))
+
+    HttpServer::new(move || {
+        let input_device_path = "/dev/input/event3";
+        let input_device = match Device::open(input_device_path) {
+            Ok(v) => Mutex::new(v),
+            Err(e) =>  {
+                eprintln!("{} failed to open device '{}': {:?}",
+                          "Error:".red().bold(), input_device_path, e);
+                std::process::exit(1);
+            }
+        };
+
+        App::new()
+            .app_data(web::Data::new(input_device))
+            .route("/event", web::post().to(post_event))
+    })
         .bind("0.0.0.0:8081")?
         .run().await
 }
 
-fn post_event(event: web::Json<EventParam>) -> HttpResponse {
+fn post_event(req: HttpRequest, event: web::Json<EventParam>) -> HttpResponse {
     use std::str::FromStr;
-    
-    let device_path = "/dev/input/event3";
-    let mut device = match Device::open(device_path) {
-        Ok(v) => v,
-        Err(e) =>  {
-            eprintln!("{} failed to open device '{}': {:?}",
-                    "Error:".red().bold(), device_path, e);
-            std::process::exit(1);
-        }
-    };
-    
+
+    let mut device = req.app_data::<web::Data<Mutex<Device>>>().unwrap().lock().unwrap();
+
     match Key::from_str(&event.key) {
       Ok(v) => {
         device.send_events(&[
